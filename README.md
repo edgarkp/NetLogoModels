@@ -8,7 +8,7 @@ Models in Economics and Finance done in 2015 at Tapei by Murat Yıldızoglu :
 The idea is to represent the price dynamics under very simple market conditions according to user inputs and model parameters
 
 ### 2) An industrial dynamics model :
-This model is based on the work of Nelson & Winter:
+This model is based on the work of Nelson & Winter in 1982 (Check references 1 & 2):
 
 The idea is to check the influence of technical progress on industry evolution with innovation and global imitation and to understand how innovation and imitation process is implemented in a basic approach. One will also check their consequences on the industry dynamics 
 

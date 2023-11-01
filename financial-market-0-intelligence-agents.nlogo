@@ -1,3 +1,14 @@
+;; The market of a financial asset contains n zero-intelligence agents. In each period, m agents, randomly selected from the set of n agents,
+;; participate to the market. Each of these m agents decides, in a equiprobable way, between proposing to make a transaction (talk = 1) or not (talk = 0).
+;; Again in an equiprobable way, each participating agent decides to speak on the supply (ask) or the demand side (bid) of the market,
+;; and proposes a volume of assets, where this number is drawn randomly from the uniform distribution on the interval [1, lmax] .
+;; The price of the asset evolves as a function of the excess demand on the market :
+;;
+;;               p(t) = p(t-1) * exp((total-bids - total-asks)*eta)
+;;
+;; eta represents the granularity of the market in terms of price adjustment. The initial price of the asset is a parameter of the model: p0 .
+;; The model’s aim is to represent the price dynamics under these very simple market conditions, given the values adopted by the user for the model parameters.
+
 globals [current-price previous-price return
          current-number-asks current-number-bids spread] ; declare of global variables
 breed [persons person] ; declare agent

@@ -1,3 +1,8 @@
+;;
+;; DESCRIPTION OF THE MODEL HERE
+;;
+
+
 globals [market-price total-output
          minProd meanProd maxProd
          minCapital meanCapital maxCapital
@@ -5,7 +10,7 @@ globals [market-price total-output
          meanProdInnov meanProdImit
          a-in a-im] ; declare global variables
 breed [firms firm] ; declare agent
-firms-own [innov? imit? probInnovation probImitation
+firms-own [innov? probInnovation probImitation
            prod capital output grossProfit
            investInnov investImit investCapital] ; declare individual properties of the agent
 
@@ -42,14 +47,12 @@ to setup-firms
         set prod A0
         set capital K0
         set innov? False
-        set imit? True
         set color cyan
         set probInnovation 0
         set probImitation probImitate
    ]
    ask n-of nbInnov firms [ ;choose randomly a number of innovators and change their propertis
         set innov? True
-        set imit? False
         set color magenta
         set probInnovation probInnov
         set probImitation 0
@@ -63,32 +66,31 @@ to set-outputs
    set maxProd A0
    set meanProfitInnov 0
    set meanProfitImit 0
-   set a-in (2 / DEM)
-   set a-im (2 / DEM)
+   set a-in (1 / DEM)
+   set a-im (1 / DEM)
 end
 
 to compute-indicators
+  ; Market price
+  ask firms [set output prod * capital] ; compute individual output
+  set total-output sum [output] of firms ; compute market output
+  let new-market-price invDemand total-output
+  set market-price new-market-price
+
+  ; Average profits for innovators and imitators
+  ask firms [set grossProfit (new-market-price - (C / prod)) * output]
+  set meanProfitInnov mean [grossProfit] of firms with [innov? = True]
+  set meanProfitImit mean [grossProfit] of firms with [innov? = False]
+
   ; Average, Min & Max productivity of the market
   set minProd min [prod] of firms
   set meanProd mean [prod] of firms
   set maxProd max [prod] of firms
-  set meanProdInnov mean [prod] of firms with [innov? = True]
-  set meanProdImit mean [prod] of firms with [imit? = True]
 
   ; Average, Min & Max capital stock of the market
   set minCapital min [capital] of firms
   set meanCapital mean [capital] of firms
   set maxCapital max [capital] of firms
-
-  ; Market price
-  ask firms [set output prod * capital] ; compute individual output
-  set total-output sum [output] of firms ; compute market output
-  set market-price invDemand total-output
-
-  ; Average profits for innovators and imitators
-  ask firms [set grossProfit (market-price - (C / prod)) * output]
-  set meanProfitInnov mean [grossProfit] of firms with [innov? = True]
-  set meanProfitImit mean [grossProfit] of firms with [imit? = True]
 end
 
 to update-productivity-capital
@@ -96,19 +98,34 @@ to update-productivity-capital
   ask firms [
    if (grossProfit > 0) [
       set investCapital (1 - rdShare) *  grossProfit
-      set investImit (1 - innovShare) * rdShare *  grossProfit
-      set investInnov innovShare * rdShare *  grossProfit
 
-      if (innov?) [set probInnovation a-in * investInnov] ; the more we invest in innovation, the more we have the chance to reach an innovation
-      if (imit?) [set probImitation a-im * investImit] ; the more we invest in imitation, the more we have the chance to be succesful in imitation
+      let investRD rdShare * grossProfit
 
-      let prodInnov innovation probInnovation prod meanProd ; compute new productivity level for innovators through "innovation" reporter
+      ifelse (innov?) [
+        set investImit (1 - innovShare) * investRD
+        set investInnov innovShare * investRD
+      ]
+      [
+        set investImit investRD
+        set investInnov 0
+      ]
+
+      set probInnovation a-in * investInnov ; the more we invest in innovation, the more we have the chance to reach an innovation
+      set probImitation a-im * investImit ; the more we invest in imitation, the more we have the chance to be succesful in imitation
+
+      let prodInnov innovation innov? probInnovation prod meanProd ; compute new productivity level for innovators through "innovation" reporter
       let prodImit imitation probImitation prod maxProd ; compute new productivity level for imitators through "imitation" reporter
-      set prod max (list prod prodInnov prodImit) ; get the best possible productivity from innovation and imitation
+      let max-of-prod max(list prod prodInnov prodImit) ; get the best possible productivity from innovation and imitation
+      set prod max-of-prod
 
-      set capital investK investCapital capital; compute new capital stock through "investK" reporter
+      let new-capital investK investCapital capital; compute new capital stock through "investK" reporter
+      set capital new-capital
     ]
    ]
+
+  set meanProdInnov mean [prod] of firms with [innov? = True]
+  set meanProdImit mean [prod] of firms with [innov?  = False]
+
 end
 
 
@@ -118,36 +135,43 @@ end
 
 ; Calculte market-price
 to-report invDemand [param-total-output]
-  set market-price (DEM / ((param-total-output) ^ ETA)) ; compute the market price from the inverse demand function
+  let market-price-denom param-total-output ^ ETA
+  let market-price-num DEM
+  set market-price market-price-num / market-price-denom; compute the market price from the inverse demand function
   report market-price
 end
 
 ; Update production and capital
-to-report innovation [param-prob param-prod param-mean-prod]
-  ifelse (random-float 1 <= param-prob)
-  ; We will consider that each firm benefits from two types of knowledge to innovate: her productivity (her individual
-  ; knowledge level), and the average productivity of the industry (collective knowledge base, At), given the
-  ; weight alpha of the social dimension:
-  [let mu ((1 - alpha) * param-prod) + (alpha * param-mean-prod)
-   let var STD ^ 2
-   set prod random-normal mu var]
-  [set prod param-prod]
+to-report innovation [param-type-firm? param-prob param-prod param-mean-prod]
+  let new-prod param-prod
 
-  report prod
+  ifelse (param-type-firm?) [
+    ifelse (random-float 1 < param-prob)
+    ; We will consider that each firm benefits from two types of knowledge to innovate: her productivity (her individual
+    ; knowledge level), and the average productivity of the industry (collective knowledge base, At), given the
+    ; weight alpha of the social dimension:
+     [let mu ((1 - alpha) * param-prod) + (alpha * param-mean-prod)
+      let new-prod-innov random-normal mu STD
+      set new-prod max (list param-prod new-prod-innov)]
+     [set new-prod param-prod]
+  ]
+  [set new-prod 0]
+  report new-prod
 end
 
 to-report imitation [param-prob param-prod param-max-prod]
-  ifelse (random-float 1 <= param-prob)
-  [set prod param-max-prod] ; if the imitation is successful, the firm gets the best practice of the industry
-  [set prod param-prod] ; if the imitation is a failure
+  let new-prod param-prod
 
-  report prod
+  ifelse (random-float 1 < param-prob)
+  [set new-prod param-prod + param-prob * (param-max-prod - param-prod)] ; if the imitation is successful, the firm gets the best practice of the industry
+  [set new-prod param-prod] ; if the imitation is a failure
+
+  report new-prod
 end
 
 to-report investK [param-invest param-capital]
   report param-invest + (1 - DEPREC) * param-capital
 end
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
@@ -219,7 +243,7 @@ alpha
 alpha
 0
 1
-1.0
+0.5
 0.01
 1
 NIL
@@ -249,7 +273,7 @@ innovShare
 innovShare
 0
 1
-0.5
+0.2
 0.01
 1
 NIL
@@ -264,7 +288,7 @@ probInnov
 probInnov
 0
 1
-0.5
+0.49
 0.01
 1
 NIL
@@ -279,7 +303,7 @@ probImitate
 probImitate
 0
 1
-0.5
+0.52
 0.01
 1
 NIL
@@ -302,7 +326,7 @@ INPUTBOX
 174
 454
 K0
-2000.0
+1000.0
 1
 0
 Number
@@ -324,7 +348,7 @@ INPUTBOX
 369
 455
 DEM
-1000.0
+1000000.0
 1
 0
 Number
@@ -346,7 +370,7 @@ INPUTBOX
 559
 380
 STD
-0.05
+3.0
 1
 0
 Number
@@ -357,7 +381,7 @@ INPUTBOX
 559
 457
 DEPREC
-0.2
+0.3
 1
 0
 Number
@@ -368,7 +392,7 @@ INPUTBOX
 741
 379
 nbInnov
-100.0
+10.0
 1
 0
 Number
@@ -379,7 +403,7 @@ INPUTBOX
 741
 461
 nbImit
-50.0
+40.0
 1
 0
 Number
@@ -424,8 +448,8 @@ NIL
 0.0
 10500.0
 90.0
-110.0
-false
+120.0
+true
 true
 "" ""
 PENS
@@ -450,7 +474,7 @@ true
 "" ""
 PENS
 "Innovators" 1.0 0 -5825686 true "" "plot meanProfitInnov"
-"Imitators" 1.0 0 -11221820 true "" "plot meanProfitImit"
+"Pure imitators" 1.0 0 -11221820 true "" "plot meanProfitImit"
 
 PLOT
 1038
@@ -483,13 +507,13 @@ NIL
 0.0
 10500.0
 90.0
-110.0
-false
+120.0
+true
 true
 "" ""
 PENS
 "Innovators" 1.0 0 -5825686 true "" "plot meanProdInnov"
-"Imitators" 1.0 0 -11221820 true "" "plot meanProdImit"
+"Pure imitators" 1.0 0 -11221820 true "" "plot meanProdImit"
 
 @#$#@#$#@
 ## WHAT IS IT?
