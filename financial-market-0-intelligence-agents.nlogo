@@ -1,26 +1,12 @@
-;; The market of a financial asset contains n zero-intelligence agents. In each period, m agents, randomly selected from the set of n agents,
-;; participate to the market. Each of these m agents decides, in a equiprobable way, between proposing to make a transaction (talk = 1) or not (talk = 0).
-;; Again in an equiprobable way, each participating agent decides to speak on the supply (ask) or the demand side (bid) of the market,
-;; and proposes a volume of assets, where this number is drawn randomly from the uniform distribution on the interval [1, lmax] .
-;; The price of the asset evolves as a function of the excess demand on the market :
-;;
-;;               p(t) = p(t-1) * exp((total-bids - total-asks)*eta)
-;;
-;; eta represents the granularity of the market in terms of price adjustment. The initial price of the asset is a parameter of the model: p0 .
-;; The model’s aim is to represent the price dynamics under these very simple market conditions, given the values adopted by the user for the model parameters.
-
 globals [current-price previous-price return
-         current-number-asks current-number-bids spread] ; declare of global variables
+         current-number-asks current-number-bids order-balance order-book-balance] ; declare of global variables
 breed [persons person] ; declare agent
-persons-own [talk? bid? ask? volume-assets] ; declare individual properties of the agent
+persons-own [talk? bid? ask? volume] ; declare individual properties of the agent
 
 to setup
   clear-all
-  set current-price initial-price
-  set previous-price initial-price
-  set current-number-bids 0
-  set current-number-asks 0
-  setup-persons
+  setup-variables ; set up the global variables used for computation
+  setup-persons ; set up the agents
   reset-ticks
 end
 
@@ -32,6 +18,15 @@ to go
   tick
 end
 
+to setup-variables
+   set current-price initial-price
+   set previous-price initial-price
+   set current-number-bids 0
+   set current-number-asks 0
+   set return [] ;
+   set order-book-balance [0];
+end
+
 to setup-persons
   create-persons number-agents ; create a given number of persons
   ask persons [
@@ -41,33 +36,37 @@ to setup-persons
     set talk? False
     set bid? False
     set ask? False
-  ] ;; set agents
+  ]
 end
 
 to make-decision
+  ; only a hand of people can intervene in the market
   ask n-of number-speakers persons [
-  ifelse random-float 1 <= 0.5 [set talk? False] [set talk? True]
+  ifelse random-float 1 <= 0.5 [set talk? False] [set talk? True] ; some of them can decide to actually interve or not
   if talk? [
-    set volume-assets 1 + random (max-order-size - 1)
-    ;show volume-assets
+    set volume 1 + random (max-order-size - 1) ; only when an agent wants to participate, the agent defines the volume he wants to bid or ask
     ifelse random-float 1 <= 0.5
       [set bid? False
        set ask? True
-       set color yellow]
+       set color yellow] ; when an agent wants to sell ie speak on the supply side, color him in yellow
       [set bid? True
        set ask? False
-       set color red]
+       set color red] ; when an agent wants to buy ie speak on the demand side, color him in red
    ]
   ]
 end
 
 to execute-orders
-  set current-number-bids sum [volume-assets] of persons with [bid? = True]
-  set current-number-asks sum [volume-assets] of persons with [ask? = True]
-  set spread current-number-bids  - current-number-asks
+  set current-number-bids sum [volume] of persons with [bid? = True] ; compute the total of bids
+  set current-number-asks sum [volume] of persons with [ask? = True] ; compute the total of asks
+  set order-balance current-number-bids  - current-number-asks ; compute the spread
+  set order-book-balance lput order-balance order-book-balance ; monitor all the values of spread
 
-  set current-price previous-price * exp(spread * granularity)
-  set return ln(current-price) - ln(previous-price)
+  set previous-price current-price
+  set current-price previous-price * exp(order-balance * granularity)
+
+  let current-return ln(current-price) - ln(previous-price) ; get the return of the stock
+  set return lput current-return return  ; monitor all its values during the simulation
 end
 
 to cancel-orders
@@ -76,11 +75,8 @@ to cancel-orders
     set talk? False
     set bid? False
     set ask? False
-  ] ;; reinitialize at each tick
+  ]
 end
-
-
-;histogram [ret] of persons
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
@@ -133,7 +129,7 @@ number-speakers
 number-speakers
 40
 200
-200.0
+100.0
 10
 1
 NIL
@@ -148,7 +144,7 @@ max-order-size
 max-order-size
 2
 200
-200.0
+50.0
 6
 1
 NIL
@@ -178,7 +174,7 @@ granularity
 granularity
 0
 0.00005
-1.0E-5
+2.0E-5
 0.000002
 1
 NIL
@@ -274,7 +270,7 @@ PLOT
 285
 814
 435
-Spread evolution
+order book balance
 NIL
 NIL
 0.0
@@ -285,62 +281,105 @@ true
 false
 "" ""
 PENS
-"default" 1.0 0 -16777216 true "" "plot spread"
+"instantaneous" 1.0 0 -16777216 true "" "plot order-balance"
+"mean" 1.0 0 -2674135 true "" "plot mean(order-book-balance)"
 
 PLOT
 964
 245
 1164
 395
-Histogram of the stock return
+Market return
 NIL
 NIL
+-0.25
+0.25
 0.0
-10.0
-0.0
-10.0
+15000.0
 true
 false
-"" ""
+"set-histogram-num-bars 10" ""
 PENS
 "default" 1.0 1 -16777216 true "" "histogram return"
 
 @#$#@#$#@
 ## WHAT IS IT?
 
-(a general understanding of what the model is trying to show or explain)
+The model’s aim is to represent the price dynamics under very simple market conditions, given the values adopted by the user for the model parameters.
 
 ## HOW IT WORKS
 
-(what rules the agents use to create the overall behavior of the model)
+The market of a financial asset contains agents on the hypothesis they have zero-intelligence. In each period, a certain amount of agents are randomly selected to participate to the market. Each of these agents decides, in a equiprobable way, between proposing to make a transaction (talk = 1) or not (talk = 0).
+Again in an equiprobable way, each participating agent decides to speak on the supply (ask) or the demand side (bid) of the market, and proposes a volume of assets, where this number is drawn randomly from a uniform distribution .
+
+The price of the asset evolves as a function of the excess demand on the market :
+
+               p(t) = p(t-1) * exp((total-bids - total-asks)*eta)
+
+total bids = total volume of assets demanded
+total asks = total volume of assets supplied
+eta represents the granularity of the market and p0 the initial price .
+
+The granularity depends on various factors, including market conventions, the type of assets or goods being traded, and regulatory requirements. In some markets, high granularity is essential to capture small price movements accurately, while in others, coarser granularity is sufficient due to the nature of the assets or goods being traded
 
 ## HOW TO USE IT
 
-(how to use the model, including a description of each of the items in the Interface tab)
+### Basic Usage
+
+* SETUP button resets the model
+* GO button allows the model to continuously simulate the market
+
+### Parameters
+
+* number-agents slider is used to set the number of people in the market  
+* number-speakers is used to set the number of participants trading the stock
+* max-order-size slide is used to set the highest volume of assets which can be traded for any participant
+* initial-price slider is used to set the initial stock price when the market opens
+* granularity slider is used to set the granularity of the market in terms of price adjustment level of detail or precision at which prices are quoted or recorded in a particular market. 
+
+### Plots and monitors
+
+* Asset price monitor checks the final value of price at the end of the simulation
+* Level of total bids monitor checks the volume of assets demanded by the participants
+* Level of total asks monitor checks the volume of assets supplied by the participants
+* Order book balance plot observes the difference between the bid and ask
+* Evolution of market price plot observes the price dynamics
+* Market return plot checks how distributed the price returns are
+
 
 ## THINGS TO NOTICE
 
-(suggested things for the user to notice while running the model)
+Agents are represented with green turtles when they are not participating. If they participate, then they either turn to red (if they want to buy or speak on the demand side) or yellow (if they want to sell or speak on the supply side)
+
+Notice also that the price return is always distributed normally. Why might this happen ?
+
 
 ## THINGS TO TRY
 
-(suggested things for the user to try to do (move sliders, switches, etc.) with the model)
+* Choose one parameter among these ones (granularity , max-order-size , number-speakers with respect to the number-agents) and fix the others to conduct a parametric study : what do you observe in terms of volatility and participants behavior ? 
+
+* Re-assess your study by running the model several times. Is it possible to converge to an equilibrium at each run ?
+
+* Do you think the model can be closed to the financial markets groundtruth ?
 
 ## EXTENDING THE MODEL
 
-(suggested things to add or change in the Code tab to make the model more complicated, detailed, accurate, etc.)
+Try to fine-tune the parameters in order to fit the model with real data from different market types . A two-step approach can be used :
 
-## NETLOGO FEATURES
+* Check your fine tuning with two assets from the same sector to see if there are common values for some parameters
+* Check again with two assets from different sectors to understand the values difference
 
-(interesting or unusual features of NetLogo that the model uses, particularly in the Code tab; or where workarounds were needed for missing features)
 
 ## RELATED MODELS
 
-(models in the NetLogo Models Library and elsewhere which are of related interest)
+It's not really a related model but I found interesting to mention the Limited Order book by Uri Wilensky available in the Model's library . You should check it if you are passionate about trading !!
+
 
 ## CREDITS AND REFERENCES
 
-(a reference to the model's URL on the web if it has one, as well as any other necessary credits, citations, and links)
+1. Economy as a complex adaptive system (CAS), Murat Yıldızoglu, Pre-conference workshop on Agent-based Models in Economics and Finance, CEF 2015 Conference, Taipei
+
+2. https://www.investopedia.com/terms/b/bid-and-ask.asp
 @#$#@#$#@
 default
 true
