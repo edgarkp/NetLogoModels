@@ -1,183 +1,88 @@
-;;
-;; DESCRIPTION OF THE MODEL HERE
-;;
-
-
-globals [market-price total-output
-         minProd meanProd maxProd
-         minCapital meanCapital maxCapital
-         meanProfitInnov meanProfitImit
-         meanProdInnov meanProdImit
-         a-in a-im] ; declare global variables
-breed [firms firm] ; declare agent
-firms-own [innov? probInnovation probImitation
-           prod capital output grossProfit
-           investInnov investImit investCapital] ; declare individual properties of the agent
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; SET UP & GO
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+globals [current-price previous-price return
+         current-number-asks current-number-bids order-balance order-book-balance] ; declare of global variables
+breed [persons person] ; declare agent
+persons-own [talk? bid? ask? volume] ; declare individual properties of the agent
 
 to setup
   clear-all
-  setup-firms
-  set-outputs
+  setup-variables ; set up the global variables used for computation
+  setup-persons ; set up the agents
   reset-ticks
 end
 
 to go
-  if (ticks > nbPeriods) [stop]
-  compute-indicators
-  update-productivity-capital
+  if (ticks > 15000) [stop]
+  cancel-orders ; reset the decisions
+  make-decision ; create the market speakers and set their decisions
+  execute-orders ; execute the orders of the speakers to compute market features
   tick
 end
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; COMMANDS
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-to setup-firms
-   let nb nbInnov + nbImit
-   create-firms nb ; create all firms
-   ask firms [ ; set properties of all firms as if there are imitators
-        setxy random-xcor random-ycor
-        set shape "house"
-        set prod A0
-        set capital K0
-        set innov? False
-        set color cyan
-        set probInnovation 0
-        set probImitation probImitate
-   ]
-   ask n-of nbInnov firms [ ;choose randomly a number of innovators and change their propertis
-        set innov? True
-        set color magenta
-        set probInnovation probInnov
-        set probImitation 0
-   ]
+to setup-variables
+   set current-price initial-price
+   set previous-price initial-price
+   set current-number-bids 0
+   set current-number-asks 0
+   set return [] ;
+   set order-book-balance [0];
 end
 
-to set-outputs
-   set market-price 0 ; set market price
-   set minProd A0
-   set meanProd A0
-   set maxProd A0
-   set meanProfitInnov 0
-   set meanProfitImit 0
-   set a-in (1 / DEM)
-   set a-im (1 / DEM)
-end
-
-to compute-indicators
-  ; Market price
-  ask firms [set output prod * capital] ; compute individual output
-  set total-output sum [output] of firms ; compute market output
-  let new-market-price invDemand total-output
-  set market-price new-market-price
-
-  ; Average profits for innovators and imitators
-  ask firms [set grossProfit (new-market-price - (C / prod)) * output]
-  set meanProfitInnov mean [grossProfit] of firms with [innov? = True]
-  set meanProfitImit mean [grossProfit] of firms with [innov? = False]
-
-  ; Average, Min & Max productivity of the market
-  set minProd min [prod] of firms
-  set meanProd mean [prod] of firms
-  set maxProd max [prod] of firms
-
-  ; Average, Min & Max capital stock of the market
-  set minCapital min [capital] of firms
-  set meanCapital mean [capital] of firms
-  set maxCapital max [capital] of firms
-end
-
-to update-productivity-capital
-  ; defines the share of investments for capital stock, innovation and imitation
-  ask firms [
-   if (grossProfit > 0) [
-      set investCapital (1 - rdShare) *  grossProfit
-
-      let investRD rdShare * grossProfit
-
-      ifelse (innov?) [
-        set investImit (1 - innovShare) * investRD
-        set investInnov innovShare * investRD
-      ]
-      [
-        set investImit investRD
-        set investInnov 0
-      ]
-
-      set probInnovation a-in * investInnov ; the more we invest in innovation, the more we have the chance to reach an innovation
-      set probImitation a-im * investImit ; the more we invest in imitation, the more we have the chance to be succesful in imitation
-
-      let prodInnov innovation innov? probInnovation prod meanProd ; compute new productivity level for innovators through "innovation" reporter
-      let prodImit imitation probImitation prod maxProd ; compute new productivity level for imitators through "imitation" reporter
-      let max-of-prod max(list prod prodInnov prodImit) ; get the best possible productivity from innovation and imitation
-      set prod max-of-prod
-
-      let new-capital investK investCapital capital; compute new capital stock through "investK" reporter
-      set capital new-capital
-    ]
-   ]
-
-  set meanProdInnov mean [prod] of firms with [innov? = True]
-  set meanProdImit mean [prod] of firms with [innov?  = False]
-
-end
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; REPORTERS
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-; Calculte market-price
-to-report invDemand [param-total-output]
-  let market-price-denom param-total-output ^ ETA
-  let market-price-num DEM
-  set market-price market-price-num / market-price-denom; compute the market price from the inverse demand function
-  report market-price
-end
-
-; Update production and capital
-to-report innovation [param-type-firm? param-prob param-prod param-mean-prod]
-  let new-prod param-prod
-
-  ifelse (param-type-firm?) [
-    ifelse (random-float 1 < param-prob)
-    ; We will consider that each firm benefits from two types of knowledge to innovate: her productivity (her individual
-    ; knowledge level), and the average productivity of the industry (collective knowledge base, At), given the
-    ; weight alpha of the social dimension:
-     [let mu ((1 - alpha) * param-prod) + (alpha * param-mean-prod)
-      let new-prod-innov random-normal mu STD
-      set new-prod max (list param-prod new-prod-innov)]
-     [set new-prod param-prod]
+to setup-persons
+  create-persons number-agents ; create a given number of persons
+  ask persons [
+    setxy random-xcor random-ycor
+    set color green
+    set shape "person"
+    set talk? False
+    set bid? False
+    set ask? False
   ]
-  [set new-prod 0]
-  report new-prod
 end
 
-to-report imitation [param-prob param-prod param-max-prod]
-  let new-prod param-prod
-
-  ifelse (random-float 1 < param-prob)
-  [set new-prod param-prod + param-prob * (param-max-prod - param-prod)] ; if the imitation is successful, the firm gets the best practice of the industry
-  [set new-prod param-prod] ; if the imitation is a failure
-
-  report new-prod
+to make-decision
+  ; only a hand of people can intervene in the market
+  ask n-of number-speakers persons [
+  ifelse random-float 1 <= 0.5 [set talk? False] [set talk? True] ; some of them can decide to actually interve or not
+  if talk? [
+    set volume 1 + random (max-order-size - 1) ; only when an agent wants to participate, the agent defines the volume he wants to bid or ask
+    ifelse random-float 1 <= 0.5
+      [set bid? False
+       set ask? True
+       set color yellow] ; when an agent wants to sell ie speak on the supply side, color him in yellow
+      [set bid? True
+       set ask? False
+       set color red] ; when an agent wants to buy ie speak on the demand side, color him in red
+   ]
+  ]
 end
 
-to-report investK [param-invest param-capital]
-  report param-invest + (1 - DEPREC) * param-capital
+to execute-orders
+  set current-number-bids sum [volume] of persons with [bid? = True] ; compute the total of bids
+  set current-number-asks sum [volume] of persons with [ask? = True] ; compute the total of asks
+  set order-balance current-number-bids  - current-number-asks ; compute the spread
+  set order-book-balance lput order-balance order-book-balance ; monitor all the values of spread
+
+  set previous-price current-price
+  set current-price previous-price * exp(order-balance * granularity)
+
+  let current-return ln(current-price) - ln(previous-price) ; get the return of the stock
+  set return lput current-return return  ; monitor all its values during the simulation
+end
+
+to cancel-orders
+  ask persons [
+    set color green
+    set talk? False
+    set bid? False
+    set ask? False
+  ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
 10
-428
-229
+548
+349
 -1
 -1
 10.0
@@ -190,21 +95,96 @@ GRAPHICS-WINDOW
 1
 1
 1
--10
-10
--10
-10
-0
-0
+-16
+16
+-16
+16
+1
+1
 1
 ticks
 30.0
 
+SLIDER
+17
+38
+189
+71
+number-agents
+number-agents
+100
+1000
+1000.0
+20
+1
+NIL
+HORIZONTAL
+
+SLIDER
+18
+98
+190
+131
+number-speakers
+number-speakers
+40
+200
+100.0
+10
+1
+NIL
+HORIZONTAL
+
+SLIDER
+18
+163
+190
+196
+max-order-size
+max-order-size
+2
+200
+50.0
+6
+1
+NIL
+HORIZONTAL
+
+SLIDER
+17
+221
+189
+254
+initial-price
+initial-price
+10
+100
+100.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+18
+286
+190
+319
+granularity
+granularity
+0
+0.00005
+2.0E-5
+0.000002
+1
+NIL
+HORIZONTAL
+
 BUTTON
-217
-250
-281
-283
+224
+394
+288
+427
 Setup
 setup
 NIL
@@ -218,10 +198,10 @@ NIL
 1
 
 BUTTON
-353
-251
-416
-284
+471
+398
+534
+431
 Go
 go
 T
@@ -234,197 +214,45 @@ NIL
 NIL
 1
 
-SLIDER
+MONITOR
+611
+42
+685
+87
+Asset Price
+current-price
+2
+1
 11
-12
-183
-45
-alpha
-alpha
-0
-1
-0.5
-0.01
-1
-NIL
-HORIZONTAL
 
-SLIDER
-13
-68
-185
-101
-rdShare
-rdShare
-0
-1
-0.5
-0.01
-1
-NIL
-HORIZONTAL
-
-SLIDER
-14
-125
-186
+MONITOR
+613
+113
+741
 158
-innovShare
-innovShare
+Level of total asks
+current-number-asks
 0
 1
-0.2
-0.01
-1
-NIL
-HORIZONTAL
+11
 
-SLIDER
-15
-183
-187
-216
-probInnov
-probInnov
+MONITOR
+614
+189
+740
+234
+Level of total bids
+current-number-bids
 0
 1
-0.49
-0.01
-1
-NIL
-HORIZONTAL
-
-SLIDER
-14
-238
-186
-271
-probImitate
-probImitate
-0
-1
-0.52
-0.01
-1
-NIL
-HORIZONTAL
-
-INPUTBOX
-17
-319
-172
-379
-A0
-100.0
-1
-0
-Number
-
-INPUTBOX
-19
-394
-174
-454
-K0
-1000.0
-1
-0
-Number
-
-INPUTBOX
-211
-320
-366
-380
-C
-1.0
-1
-0
-Number
-
-INPUTBOX
-214
-395
-369
-455
-DEM
-1000000.0
-1
-0
-Number
-
-INPUTBOX
-213
-471
-368
-531
-ETA
-0.8
-1
-0
-Number
-
-INPUTBOX
-404
-320
-559
-380
-STD
-3.0
-1
-0
-Number
-
-INPUTBOX
-404
-397
-559
-457
-DEPREC
-0.3
-1
-0
-Number
-
-INPUTBOX
-586
-319
-741
-379
-nbInnov
-10.0
-1
-0
-Number
-
-INPUTBOX
-586
-401
-741
-461
-nbImit
-40.0
-1
-0
-Number
-
-INPUTBOX
-588
-474
-743
-534
-nbPeriods
-10000.0
-1
-0
-Number
+11
 
 PLOT
-788
-17
-988
-167
-Market price
+963
+44
+1163
+194
+Evolution of market price
 NIL
 NIL
 0.0
@@ -435,34 +263,14 @@ true
 false
 "" ""
 PENS
-"default" 1.0 0 -16777216 true "" "plot market-price"
+"default" 1.0 0 -16777216 true "" "plot current-price"
 
 PLOT
-1039
-16
-1239
-166
-Productivity
-NIL
-NIL
-0.0
-10500.0
-90.0
-120.0
-true
-true
-"" ""
-PENS
-"mean" 1.0 0 -16777216 true "" "plot meanProd"
-"min" 1.0 0 -2674135 true "" "plot minProd"
-"max" 1.0 0 -10899396 true "" "plot maxProd"
-
-PLOT
-788
-195
-988
-345
-Average Profit
+614
+285
+814
+435
+order book balance
 NIL
 NIL
 0.0
@@ -470,87 +278,130 @@ NIL
 0.0
 10.0
 true
-true
+false
 "" ""
 PENS
-"Innovators" 1.0 0 -5825686 true "" "plot meanProfitInnov"
-"Pure imitators" 1.0 0 -11221820 true "" "plot meanProfitImit"
+"instantaneous" 1.0 0 -16777216 true "" "plot order-balance"
+"mean" 1.0 0 -2674135 true "" "plot mean(order-book-balance)"
 
 PLOT
-1038
-201
-1238
-351
-Capital
+964
+245
+1164
+395
+Market return
 NIL
 NIL
+-0.25
+0.25
 0.0
-10.0
-0.0
-10.0
+15000.0
 true
-true
-"" ""
+false
+"set-histogram-num-bars 10" ""
 PENS
-"mean" 1.0 0 -16777216 true "" "plot meanCapital"
-"min" 1.0 0 -2674135 true "" "plot minCapital"
-"max" 1.0 0 -10899396 true "" "plot maxCapital"
-
-PLOT
-788
-384
-988
-534
-Average Productivity
-NIL
-NIL
-0.0
-10500.0
-90.0
-120.0
-true
-true
-"" ""
-PENS
-"Innovators" 1.0 0 -5825686 true "" "plot meanProdInnov"
-"Pure imitators" 1.0 0 -11221820 true "" "plot meanProdImit"
+"default" 1.0 1 -16777216 true "" "histogram return"
 
 @#$#@#$#@
 ## WHAT IS IT?
 
-(a general understanding of what the model is trying to show or explain)
+The model’s aim is to represent the price dynamics under very simple market conditions, given the values adopted by the user for the model parameters.
 
 ## HOW IT WORKS
 
-(what rules the agents use to create the overall behavior of the model)
+The market of a financial asset contains agents on the hypothesis they have zero-intelligence. In each period, a certain amount of agents are randomly selected to participate to the market. Each of these agents decides, in a equiprobable way, between proposing to make a transaction (talk = 1) or not (talk = 0).
+Again in an equiprobable way, each participating agent decides to speak on the supply (ask) or the demand side (bid) of the market, and proposes a volume of assets, where this number is drawn randomly from a uniform distribution .
+
+The price of the asset evolves as a function of the excess demand on the market :
+
+               p(t) = p(t-1) * exp((total-bids - total-asks)*eta)
+
+total bids = total volume of assets demanded
+total asks = total volume of assets supplied
+eta represents the granularity of the market and p0 the initial price .
+
+The granularity depends on various factors, including market conventions, the type of assets or goods being traded, and regulatory requirements. In some markets, high granularity is essential to capture small price movements accurately, while in others, coarser granularity is sufficient due to the nature of the assets or goods being traded
 
 ## HOW TO USE IT
 
-(how to use the model, including a description of each of the items in the Interface tab)
+### Basic Usage
+
+* SETUP button resets the model
+* GO button allows the model to continuously simulate the market
+
+### Parameters
+
+* number-agents slider is used to set the number of people in the market  
+* number-speakers is used to set the number of participants trading the stock
+* max-order-size slide is used to set the highest volume of assets which can be traded for any participant
+* initial-price slider is used to set the initial stock price when the market opens
+* granularity slider is used to set the granularity of the market in terms of price adjustment level of detail or precision at which prices are quoted or recorded in a particular market. 
+
+### Plots and monitors
+
+* Asset price monitor checks the final value of price at the end of the simulation
+* Level of total bids monitor checks the volume of assets demanded by the participants
+* Level of total asks monitor checks the volume of assets supplied by the participants
+* Order book balance plot observes the difference between the bid and ask
+* Evolution of market price plot observes the price dynamics
+* Market return plot checks how distributed the price returns are
+
 
 ## THINGS TO NOTICE
 
-(suggested things for the user to notice while running the model)
+Agents are represented with green turtles when they are not participating. If they participate, then they either turn to red (if they want to buy or speak on the demand side) or yellow (if they want to sell or speak on the supply side)
+
+Notice also that the price return is always distributed normally. Why might this happen ?
+
 
 ## THINGS TO TRY
 
-(suggested things for the user to try to do (move sliders, switches, etc.) with the model)
+* Choose one parameter among these ones (granularity , max-order-size , number-speakers with respect to the number-agents) and fix the others to conduct a parametric study : what do you observe in terms of volatility and participants behavior ? 
+
+* Re-assess your study by running the model several times. Is it possible to converge to an equilibrium at each run ?
+
+* Do you think the model can be closed to the financial markets groundtruth ?
 
 ## EXTENDING THE MODEL
 
-(suggested things to add or change in the Code tab to make the model more complicated, detailed, accurate, etc.)
+Try to fine-tune the parameters in order to fit the model with real data from different market types . A two-step approach can be used :
 
-## NETLOGO FEATURES
+* Check your fine tuning with two assets from the same sector to see if there are common values for some parameters
+* Check again with two assets from different sectors to understand the values difference
 
-(interesting or unusual features of NetLogo that the model uses, particularly in the Code tab; or where workarounds were needed for missing features)
 
 ## RELATED MODELS
 
-(models in the NetLogo Models Library and elsewhere which are of related interest)
+It's not really a related model but I found interesting to mention the Limited Order book by Uri Wilensky available in the Model's library . You should check it if you are passionate about trading !!
+
 
 ## CREDITS AND REFERENCES
 
-(a reference to the model's URL on the web if it has one, as well as any other necessary credits, citations, and links)
+1. Economy as a complex adaptive system (CAS), Murat Yıldızoglu, Pre-conference workshop on Agent-based Models in Economics and Finance, CEF 2015 Conference, Taipei
+
+2. https://www.investopedia.com/terms/b/bid-and-ask.asp
+
+
+## HOW TO CITE
+
+If you mention this model or the NetLogo software in a publication, include the citation below.
+
+* Kouajiep Kouega, E. (2023).  NetLogo Market Price Dynamics Model.  https://github.com/edgarkp.
+
+
+This model was developed as part of the Autumn 2022 Agent-based Modeling course offered by Pr. Georgiy Bobashev at DSTI, Paris. For more info, visit https://www.datasciencetech.institute/fr/applied-msc-in-data-science-ai/.
+
+
+## COPYRIGHT AND LICENSE
+
+Copyright 2023 Edgar Kouajiep Kouega.
+
+<p xmlns:cc="http://creativecommons.org/ns#" xmlns:dct="http://purl.org/dc/terms/"><a property="dct:title" rel="cc:attributionURL" href="https://github.com/edgarkp/NetLogoModels">Market Price Dynamics</a> by <a rel="cc:attributionURL dct:creator" property="cc:attributionName" href="https://github.com/edgarkp">Kouajiep Kouega Edgar</a> is licensed under <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/?ref=chooser-v1" target="_blank" rel="license noopener noreferrer" style="display:inline-block;">CC BY-NC-SA 4.0</a></p>
+
+![CC BY-NC-SA 4.0](http://ccl.northwestern.edu/images/creativecommons/byncsa.png)
+
+
+This work is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 License.  To view a copy of this license, visit https://creativecommons.org/licenses/by-nc-sa/4.0/ or send a letter to Creative Commons, PO Box 1866, Mountain View, CA 94042, USA.
 @#$#@#$#@
 default
 true
