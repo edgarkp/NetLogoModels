@@ -8,12 +8,6 @@ Models in Economics and Finance done in 2015 at Tapei by Murat Yıldızoglu :
 The idea is to represent the price dynamics under very simple market conditions according to user inputs and model parameters
 
 ### References
+[1] https://www.investopedia.com/terms/b/bid-and-ask.asp
 
-[1] https://www.investopedia.com/terms/p/priceelasticity.asp
-
-[2] https://www.investopedia.com/terms/b/bid-and-ask.asp
-
-[3] https://en.wikipedia.org/wiki/Excess_demand_function
-
-[4] https://open.lib.umn.edu/principleseconomics/chapter/5-1-the-price-elasticity-of-demand/ 
 
