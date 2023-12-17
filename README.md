@@ -9,14 +9,11 @@ The idea is to represent the price dynamics under very simple market conditions 
 
 ### References
 
-[1] Chap.12&14 in Nelson, R. and S. Winter, 1984, An Evolutionary Theory of Economic Change, Belknapp
-Press, Cambridge: MA
+[1] https://www.investopedia.com/terms/p/priceelasticity.asp
 
-[2] https://www.investopedia.com/terms/p/priceelasticity.asp
+[2] https://www.investopedia.com/terms/b/bid-and-ask.asp
 
-[3] https://www.investopedia.com/terms/b/bid-and-ask.asp
+[3] https://en.wikipedia.org/wiki/Excess_demand_function
 
-[4] https://en.wikipedia.org/wiki/Excess_demand_function
-
-[5] https://open.lib.umn.edu/principleseconomics/chapter/5-1-the-price-elasticity-of-demand/ 
+[4] https://open.lib.umn.edu/principleseconomics/chapter/5-1-the-price-elasticity-of-demand/ 
 
